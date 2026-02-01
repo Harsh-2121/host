@@ -318,9 +318,8 @@ MIT License - see LICENSE file for details
 ## 📞 Support
 
 Need help?
-- 📧 Email: support@gizmochat.dev
-- 💬 Discord: https://discord.gg/gizmochat
-- 🐛 Issues: https://github.com/yourname/gizmochat/issues
+- 📧 Email: gizmo.dev352@gmail.com
+- 🐛 Issues: https://github.com/Harsh-2121/gizmochat/issues
 - 📖 Docs: See DEPLOYMENT.md
 
 ---
