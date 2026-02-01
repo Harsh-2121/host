@@ -1,0 +1,134 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    @apply border-dark-border;
+  }
+  
+  body {
+    @apply bg-dark-bg text-dark-text antialiased;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+
+  ::-webkit-scrollbar {
+    @apply w-2 h-2;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-dark-border rounded hover:bg-dark-muted;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply px-4 py-2 bg-accent text-white rounded-lg font-medium
+           hover:bg-accent-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-secondary {
+    @apply px-4 py-2 bg-dark-panel-2 border border-dark-border text-dark-text rounded-lg
+           hover:border-accent transition-colors;
+  }
+
+  .input {
+    @apply w-full px-4 py-2 bg-dark-panel-2 border border-dark-border rounded-lg
+           focus:outline-none focus:border-accent transition-colors text-dark-text
+           placeholder:text-dark-muted;
+  }
+
+  .card {
+    @apply bg-dark-panel border border-dark-border rounded-xl p-4 shadow-lg;
+  }
+
+  .modal-overlay {
+    @apply fixed inset-0 bg-black/50 backdrop-blur-sm z-50
+           flex items-center justify-center p-4;
+  }
+
+  .modal {
+    @apply bg-dark-panel border border-dark-border rounded-xl
+           shadow-2xl max-w-lg w-full max-h-[90vh] overflow-auto;
+  }
+}
+
+/* Custom animations */
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideInLeft {
+  from {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.animate-slide-in-right {
+  animation: slideInRight 0.3s ease-out;
+}
+
+.animate-slide-in-left {
+  animation: slideInLeft 0.3s ease-out;
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.2s ease-out;
+}
+
+.animate-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Code block styling */
+pre {
+  @apply bg-dark-panel-2 border border-dark-border rounded-lg p-4 overflow-x-auto;
+}
+
+code {
+  @apply font-mono text-sm;
+}
+
+/* Selection */
+::selection {
+  @apply bg-accent/30 text-white;
+}
+
+/* Focus visible */
+*:focus-visible {
+  @apply outline-none ring-2 ring-accent ring-offset-2 ring-offset-dark-bg;
+}
