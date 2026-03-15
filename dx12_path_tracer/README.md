@@ -1,22 +1,23 @@
 # DirectX 12 Path Tracing Simulation
 
-This sample provides a more complete **DirectX 12 compute-based path tracer** with:
+This sample adds a minimal **DirectX 12 compute-based path tracer** that renders:
 
-- A closed arena-style scene (floor, walls, and ceiling).
-- Multiple material types: diffuse, metal (reflective), dielectric (glass), and emissive.
-- Hybrid lighting: emissive sphere, point light, and directional fill light.
-- A lightweight rigid-body **sphere physics simulation** (gravity + collisions) to generate a physically plausible final layout before rendering.
+- A ground sphere.
+- Two diffuse spheres with different albedo colors.
+- One reflective metallic sphere.
+- A single point light source.
 
 The renderer writes one path-traced frame to `pathtrace_output.ppm`.
 
 ## Scene setup
 
-`src/main.cpp` builds a complete scene:
+The sample scene is configured in `src/main.cpp`:
 
-- Static architecture spheres that form a room.
-- Dynamic spheres simulated for ~4 seconds with gravity and sphere-sphere collisions.
-- A reflective metallic hero sphere and a glass sphere.
-- An emissive sphere used as an area-like glow source.
+- **Light** at `(0, 5, 2)` with warm color and high intensity.
+- **Spheres**:
+  - Red diffuse sphere.
+  - Green diffuse sphere.
+  - Reflective metal sphere (`materialType = 1`, low `fuzz`).
 
 ## Build (Windows)
 
@@ -38,3 +39,5 @@ cd dx12_path_tracer/build/Release
 Expected output:
 
 - `pathtrace_output.ppm` in the current directory.
+
+You can open `.ppm` files in many image viewers (or convert with ImageMagick).

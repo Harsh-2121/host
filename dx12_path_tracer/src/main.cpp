@@ -5,14 +5,13 @@
 #include <d3dcompiler.h>
 
 #include <array>
-#include <cmath>
 #include <cstdint>
-#include <cstring>
 #include <fstream>
 #include <iostream>
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include <cstring>
 
 using Microsoft::WRL::ComPtr;
 
@@ -21,43 +20,14 @@ namespace
     constexpr uint32_t kWidth = 1280;
     constexpr uint32_t kHeight = 720;
 
-    struct Float3
-    {
-        float x;
-        float y;
-        float z;
-    };
-
-    Float3 operator+(const Float3& a, const Float3& b) { return {a.x + b.x, a.y + b.y, a.z + b.z}; }
-    Float3 operator-(const Float3& a, const Float3& b) { return {a.x - b.x, a.y - b.y, a.z - b.z}; }
-    Float3 operator*(const Float3& a, float s) { return {a.x * s, a.y * s, a.z * s}; }
-    Float3 operator/(const Float3& a, float s) { return {a.x / s, a.y / s, a.z / s}; }
-
-    float Dot(const Float3& a, const Float3& b) { return a.x * b.x + a.y * b.y + a.z * b.z; }
-    float Length(const Float3& v) { return std::sqrt(Dot(v, v)); }
-
-    Float3 Normalize(const Float3& v)
-    {
-        float len = Length(v);
-        if (len <= 1e-6f)
-        {
-            return {0.0f, 0.0f, 0.0f};
-        }
-        return v / len;
-    }
-
     struct alignas(16) SphereGPU
     {
         float center[3];
         float radius;
-
         float albedo[3];
         uint32_t materialType;
-
         float fuzz;
-        float ior;
-        float emission[3];
-        float pad0;
+        float padding[2];
     };
 
     struct alignas(16) SceneConstants
@@ -68,33 +38,18 @@ namespace
         uint32_t sphereCount;
 
         float cameraPos[3];
-        float pad1;
+        float pad0;
         float cameraForward[3];
-        float pad2;
+        float pad1;
         float cameraRight[3];
-        float pad3;
+        float pad2;
         float cameraUp[3];
+        float pad3;
+
+        float lightPosition[3];
+        float lightIntensity;
+        float lightColor[3];
         float pad4;
-
-        float pointLightPosition[3];
-        float pointLightIntensity;
-        float pointLightColor[3];
-        float ambientStrength;
-
-        float directionalLightDirection[3];
-        float directionalIntensity;
-        float directionalLightColor[3];
-        float pad5;
-    };
-
-    struct PhysicsSphere
-    {
-        Float3 position;
-        Float3 velocity;
-        float radius;
-        float inverseMass;
-        float restitution;
-        SphereGPU render;
     };
 
     void ThrowIfFailed(HRESULT hr, const char* message)
@@ -131,132 +86,6 @@ namespace
             const uint8_t* px = &rgbaPixels[i * 4];
             file.write(reinterpret_cast<const char*>(px), 3);
         }
-    }
-
-    void SimulatePhysics(std::vector<PhysicsSphere>& bodies, float durationSeconds)
-    {
-        const Float3 gravity = {0.0f, -9.81f, 0.0f};
-        const float timeStep = 1.0f / 120.0f;
-        const int steps = static_cast<int>(durationSeconds / timeStep);
-
-        const float arenaHalfX = 5.0f;
-        const float arenaHalfZ = 7.0f;
-
-        for (int step = 0; step < steps; ++step)
-        {
-            for (auto& body : bodies)
-            {
-                if (body.inverseMass > 0.0f)
-                {
-                    body.velocity = body.velocity + gravity * timeStep;
-                    body.position = body.position + body.velocity * timeStep;
-
-                    if (body.position.y < body.radius)
-                    {
-                        body.position.y = body.radius;
-                        body.velocity.y = -body.velocity.y * body.restitution;
-                        body.velocity.x *= 0.92f;
-                        body.velocity.z *= 0.92f;
-                    }
-
-                    if (body.position.x < -arenaHalfX + body.radius)
-                    {
-                        body.position.x = -arenaHalfX + body.radius;
-                        body.velocity.x = -body.velocity.x * body.restitution;
-                    }
-                    if (body.position.x > arenaHalfX - body.radius)
-                    {
-                        body.position.x = arenaHalfX - body.radius;
-                        body.velocity.x = -body.velocity.x * body.restitution;
-                    }
-                    if (body.position.z < -arenaHalfZ + body.radius)
-                    {
-                        body.position.z = -arenaHalfZ + body.radius;
-                        body.velocity.z = -body.velocity.z * body.restitution;
-                    }
-                    if (body.position.z > arenaHalfZ - body.radius)
-                    {
-                        body.position.z = arenaHalfZ - body.radius;
-                        body.velocity.z = -body.velocity.z * body.restitution;
-                    }
-                }
-            }
-
-            for (size_t i = 0; i < bodies.size(); ++i)
-            {
-                for (size_t j = i + 1; j < bodies.size(); ++j)
-                {
-                    if (bodies[i].inverseMass <= 0.0f && bodies[j].inverseMass <= 0.0f)
-                    {
-                        continue;
-                    }
-
-                    Float3 delta = bodies[j].position - bodies[i].position;
-                    float dist = Length(delta);
-                    const float minDist = bodies[i].radius + bodies[j].radius;
-                    if (dist <= 1e-5f || dist >= minDist)
-                    {
-                        continue;
-                    }
-
-                    Float3 normal = delta / dist;
-                    float penetration = minDist - dist;
-
-                    float invMassSum = bodies[i].inverseMass + bodies[j].inverseMass;
-                    if (invMassSum <= 0.0f)
-                    {
-                        continue;
-                    }
-
-                    bodies[i].position = bodies[i].position - normal * (penetration * (bodies[i].inverseMass / invMassSum));
-                    bodies[j].position = bodies[j].position + normal * (penetration * (bodies[j].inverseMass / invMassSum));
-
-                    Float3 relativeVelocity = bodies[j].velocity - bodies[i].velocity;
-                    float velAlongNormal = Dot(relativeVelocity, normal);
-                    if (velAlongNormal > 0.0f)
-                    {
-                        continue;
-                    }
-
-                    float restitution = (bodies[i].restitution + bodies[j].restitution) * 0.5f;
-                    float impulseScalar = -(1.0f + restitution) * velAlongNormal / invMassSum;
-                    Float3 impulse = normal * impulseScalar;
-
-                    bodies[i].velocity = bodies[i].velocity - impulse * bodies[i].inverseMass;
-                    bodies[j].velocity = bodies[j].velocity + impulse * bodies[j].inverseMass;
-                }
-            }
-        }
-
-        for (auto& body : bodies)
-        {
-            body.render.center[0] = body.position.x;
-            body.render.center[1] = body.position.y;
-            body.render.center[2] = body.position.z;
-            body.render.radius = body.radius;
-        }
-    }
-
-    SphereGPU MakeSphere(Float3 center, float radius, Float3 albedo, uint32_t materialType, float fuzz, float ior, Float3 emission)
-    {
-        SphereGPU sphere{};
-        sphere.center[0] = center.x;
-        sphere.center[1] = center.y;
-        sphere.center[2] = center.z;
-        sphere.radius = radius;
-
-        sphere.albedo[0] = albedo.x;
-        sphere.albedo[1] = albedo.y;
-        sphere.albedo[2] = albedo.z;
-        sphere.materialType = materialType;
-
-        sphere.fuzz = fuzz;
-        sphere.ior = ior;
-        sphere.emission[0] = emission.x;
-        sphere.emission[1] = emission.y;
-        sphere.emission[2] = emission.z;
-        sphere.pad0 = 0.0f;
-        return sphere;
     }
 }
 
@@ -308,16 +137,26 @@ int wmain()
 
         ComPtr<ID3DBlob> csBlob;
         ComPtr<ID3DBlob> errorBlob;
-        ThrowIfFailed(D3DCompileFromFile(
+        UINT compileFlags = D3DCOMPILE_ENABLE_STRICTNESS;
+        HRESULT compileResult = D3DCompileFromFile(
             L"pathtracer.hlsl",
             nullptr,
             D3D_COMPILE_STANDARD_FILE_INCLUDE,
             "main",
             "cs_5_1",
-            D3DCOMPILE_ENABLE_STRICTNESS,
+            compileFlags,
             0,
             &csBlob,
-            &errorBlob), "Shader compilation failed");
+            &errorBlob);
+
+        if (FAILED(compileResult))
+        {
+            if (errorBlob)
+            {
+                std::cerr << static_cast<const char*>(errorBlob->GetBufferPointer()) << "\n";
+            }
+            throw std::runtime_error("Shader compilation failed");
+        }
 
         D3D12_DESCRIPTOR_RANGE ranges[2] = {};
         ranges[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
@@ -333,14 +172,17 @@ int wmain()
         D3D12_ROOT_PARAMETER params[3] = {};
         params[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
         params[0].Descriptor.ShaderRegister = 0;
+        params[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
 
         params[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
         params[1].DescriptorTable.NumDescriptorRanges = 1;
         params[1].DescriptorTable.pDescriptorRanges = &ranges[0];
+        params[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
 
         params[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
         params[2].DescriptorTable.NumDescriptorRanges = 1;
         params[2].DescriptorTable.pDescriptorRanges = &ranges[1];
+        params[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
 
         D3D12_ROOT_SIGNATURE_DESC rootSigDesc{};
         rootSigDesc.NumParameters = static_cast<UINT>(std::size(params));
@@ -359,53 +201,25 @@ int wmain()
         ComPtr<ID3D12PipelineState> pso;
         ThrowIfFailed(device->CreateComputePipelineState(&psoDesc, IID_PPV_ARGS(&pso)), "CreateComputePipelineState failed");
 
-        std::vector<PhysicsSphere> dynamicBodies = {
-            {{-2.0f, 4.5f, 2.2f}, {2.6f, 0.0f, 1.0f}, 0.55f, 1.0f, 0.65f, MakeSphere({0,0,0}, 0.55f, {0.88f, 0.25f, 0.2f}, 0, 0.0f, 1.0f, {0,0,0})},
-            {{1.2f, 5.8f, 4.5f}, {-1.2f, 0.0f, -0.8f}, 0.7f, 1.0f, 0.70f, MakeSphere({0,0,0}, 0.7f, {0.15f, 0.45f, 0.92f}, 0, 0.0f, 1.0f, {0,0,0})},
-            {{0.5f, 7.0f, 2.7f}, {-0.8f, 0.0f, 0.2f}, 0.62f, 1.0f, 0.80f, MakeSphere({0,0,0}, 0.62f, {0.95f, 0.95f, 0.98f}, 1, 0.02f, 1.0f, {0,0,0})},
-            {{2.5f, 6.2f, 3.4f}, {-1.8f, 0.0f, -0.2f}, 0.5f, 1.0f, 0.72f, MakeSphere({0,0,0}, 0.5f, {0.98f, 0.99f, 1.0f}, 2, 0.0f, 1.45f, {0,0,0})}
+        std::vector<SphereGPU> spheres = {
+            {{0.0f, -1001.0f, 0.0f}, 1000.0f, {0.8f, 0.8f, 0.8f}, 0, 0.0f, {0.0f, 0.0f}}, // ground
+            {{-1.4f, 0.6f, 4.5f}, 0.6f, {0.9f, 0.2f, 0.2f}, 0, 0.0f, {0.0f, 0.0f}},        // diffuse red
+            {{0.0f, 0.6f, 4.0f}, 0.6f, {0.2f, 0.9f, 0.3f}, 0, 0.0f, {0.0f, 0.0f}},         // diffuse green
+            {{1.4f, 0.6f, 3.7f}, 0.6f, {0.92f, 0.92f, 0.95f}, 1, 0.03f, {0.0f, 0.0f}}       // reflective metal sphere
         };
-
-        SimulatePhysics(dynamicBodies, 4.0f);
-
-        std::vector<SphereGPU> spheres;
-        spheres.reserve(16);
-
-        spheres.push_back(MakeSphere({0.0f, -1000.0f, 0.0f}, 1000.0f, {0.68f, 0.69f, 0.72f}, 0, 0.0f, 1.0f, {0,0,0}));
-        spheres.push_back(MakeSphere({-1005.0f, 2.0f, 0.0f}, 1000.0f, {0.62f, 0.52f, 0.48f}, 0, 0.0f, 1.0f, {0,0,0}));
-        spheres.push_back(MakeSphere({1005.0f, 2.0f, 0.0f}, 1000.0f, {0.45f, 0.5f, 0.62f}, 0, 0.0f, 1.0f, {0,0,0}));
-        spheres.push_back(MakeSphere({0.0f, 2.0f, 1010.0f}, 1000.0f, {0.56f, 0.58f, 0.52f}, 0, 0.0f, 1.0f, {0,0,0}));
-        spheres.push_back(MakeSphere({0.0f, 12.0f, 0.0f}, 1000.0f, {0.7f, 0.7f, 0.7f}, 0, 0.0f, 1.0f, {0,0,0}));
-
-        for (const auto& body : dynamicBodies)
-        {
-            spheres.push_back(body.render);
-        }
-
-        spheres.push_back(MakeSphere({0.0f, 8.5f, 3.0f}, 0.65f, {1.0f, 1.0f, 1.0f}, 3, 0.0f, 1.0f, {10.0f, 9.6f, 8.8f}));
-        spheres.push_back(MakeSphere({-3.2f, 1.0f, 6.2f}, 1.0f, {0.85f, 0.78f, 0.22f}, 1, 0.12f, 1.0f, {0,0,0}));
-        spheres.push_back(MakeSphere({2.8f, 1.1f, 5.8f}, 1.1f, {0.95f, 0.95f, 1.0f}, 2, 0.0f, 1.52f, {0,0,0}));
 
         SceneConstants scene{};
         scene.width = kWidth;
         scene.height = kHeight;
-        scene.frameIndex = 42;
+        scene.frameIndex = 1;
         scene.sphereCount = static_cast<uint32_t>(spheres.size());
-
-        scene.cameraPos[0] = 0.0f; scene.cameraPos[1] = 3.2f; scene.cameraPos[2] = -10.2f;
-        Float3 forward = Normalize({0.0f, -0.15f, 1.0f});
-        scene.cameraForward[0] = forward.x; scene.cameraForward[1] = forward.y; scene.cameraForward[2] = forward.z;
+        scene.cameraPos[0] = 0.0f; scene.cameraPos[1] = 1.1f; scene.cameraPos[2] = -3.5f;
+        scene.cameraForward[0] = 0.0f; scene.cameraForward[1] = -0.1f; scene.cameraForward[2] = 1.0f;
         scene.cameraRight[0] = 1.0f; scene.cameraRight[1] = 0.0f; scene.cameraRight[2] = 0.0f;
         scene.cameraUp[0] = 0.0f; scene.cameraUp[1] = 1.0f; scene.cameraUp[2] = 0.0f;
-
-        scene.pointLightPosition[0] = -1.4f; scene.pointLightPosition[1] = 8.0f; scene.pointLightPosition[2] = 1.8f;
-        scene.pointLightIntensity = 170.0f;
-        scene.pointLightColor[0] = 1.0f; scene.pointLightColor[1] = 0.96f; scene.pointLightColor[2] = 0.88f;
-        scene.ambientStrength = 0.02f;
-
-        scene.directionalLightDirection[0] = -0.4f; scene.directionalLightDirection[1] = -1.0f; scene.directionalLightDirection[2] = -0.2f;
-        scene.directionalIntensity = 0.5f;
-        scene.directionalLightColor[0] = 0.65f; scene.directionalLightColor[1] = 0.72f; scene.directionalLightColor[2] = 1.0f;
+        scene.lightPosition[0] = 0.0f; scene.lightPosition[1] = 5.0f; scene.lightPosition[2] = 2.0f;
+        scene.lightIntensity = 80.0f;
+        scene.lightColor[0] = 1.0f; scene.lightColor[1] = 0.95f; scene.lightColor[2] = 0.9f;
 
         auto createUploadBuffer = [&](size_t size, const void* data, ComPtr<ID3D12Resource>& resource)
         {
@@ -420,7 +234,6 @@ int wmain()
             desc.MipLevels = 1;
             desc.SampleDesc.Count = 1;
             desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-
             ThrowIfFailed(device->CreateCommittedResource(
                 &heapProps,
                 D3D12_HEAP_FLAG_NONE,
@@ -519,6 +332,8 @@ int wmain()
                 IID_PPV_ARGS(&readbackBuffer)), "Create readback buffer failed");
         }
 
+        ThrowIfFailed(commandList->SetName(L"PathTracerCommandList"), "Failed to set command list name");
+
         commandList->SetComputeRootSignature(rootSignature.Get());
         ID3D12DescriptorHeap* heaps[] = {srvUavHeap.Get()};
         commandList->SetDescriptorHeaps(1, heaps);
@@ -533,6 +348,7 @@ int wmain()
 
         D3D12_RESOURCE_BARRIER barrier{};
         barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
         barrier.Transition.pResource = outputTexture.Get();
         barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
         barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
@@ -550,6 +366,7 @@ int wmain()
         dst.PlacedFootprint = footprint;
 
         commandList->CopyTextureRegion(&dst, 0, 0, 0, &src, nullptr);
+
         ThrowIfFailed(commandList->Close(), "Close command list failed");
 
         ID3D12CommandList* lists[] = {commandList.Get()};
@@ -559,7 +376,8 @@ int wmain()
         std::vector<uint8_t> pixels(kWidth * kHeight * 4);
         void* mapped = nullptr;
         ThrowIfFailed(readbackBuffer->Map(0, nullptr, &mapped), "Map readback failed");
-        auto* srcData = static_cast<uint8_t*>(mapped);
+
+        uint8_t* srcData = static_cast<uint8_t*>(mapped);
         for (uint32_t y = 0; y < kHeight; ++y)
         {
             memcpy(&pixels[y * kWidth * 4], srcData + y * footprint.Footprint.RowPitch, kWidth * 4);
@@ -567,7 +385,7 @@ int wmain()
         readbackBuffer->Unmap(0, nullptr);
 
         SaveAsPPM(L"pathtrace_output.ppm", pixels, kWidth, kHeight);
-        std::wcout << L"Path tracing with lighting + physics complete. Output saved to pathtrace_output.ppm\n";
+        std::wcout << L"Path tracing complete. Output saved to pathtrace_output.ppm\n";
 
         CloseHandle(fenceEvent);
         return 0;
