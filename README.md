@@ -345,3 +345,7 @@ Need help?
 **Built with ❤️ by developers, for developers**
 
 Star ⭐ this repo if you find it useful!
+
+## 🎯 Additional Graphics Sample
+
+A standalone DirectX 12 path tracing sample is available in [`dx12_path_tracer/`](dx12_path_tracer), including a simple lit scene with diffuse and reflective spheres.
